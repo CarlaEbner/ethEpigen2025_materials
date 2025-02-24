@@ -1,0 +1,22 @@
+---
+title: "Assignment Week 1"
+author: "Carla Ebner"
+date: "2025-02-24"
+output: html_document
+---
+
+```{R, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = TRUE)
+```
+
+First we load the required library:
+
+```{R}
+library(epiwraps)
+```
+
+Then we print out the current R session information
+
+```{R}
+sessionInfo()
+```
