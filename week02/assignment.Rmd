@@ -1,0 +1,131 @@
+---
+title: "Assignment Week 2"
+author: "Carla Ebner"
+date: "2025-03-03"
+output: html_document
+---
+
+
+```{R, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = TRUE)
+```
+1.1.1. We load the AnnotationHub library
+
+```{R}
+suppressPackageStartupMessages({
+  library(AnnotationHub) # to fetch genomes, annotations, etc.
+  library(ensembldb)     # to manipulate ensembl gene annotations
+  library(GenomicRanges) # data structure for genomic ranges 
+  library(epiwraps)      # visualization
+})
+```
+
+1.1.2. We generate an AnnotationHub object called ah
+```{R}
+ah <- AnnotationHub()
+```
+1.1.3. We search for the mouse EnsDb object and show the results that we found
+
+```{R}
+query_results1 <- query(ah, c("Mus musculus", "EnsDb", "GRCm38"))
+print(query_results1)
+```
+1.1.4. Now we can see the ID of the object version 102, which is "AH89211".We call this object "ensdb102" and show the content of it
+
+```{R}
+
+ensdb102 <- ah[["AH89211"]]
+ensdb102
+```
+1.2.1. Now we search the mouse genome sequence (dna_sm) specifically in TwoBit/2bit format also for GRCm38
+
+```{R}
+query_results2 <- query(ah, c("Mus musculus", "dna_sm", "GRCm38", "2bit"))
+print(query_results2)
+```
+1.2.2. We download the newest version of it which is "AH88477"
+
+```{R}
+dna_2bit <- ah[["AH88477"]]
+dna_2bit
+
+```
+
+1.3.1. Now we search the drosophila melanogaster genome sequence ( dna_sm ) in TwoBit/2bit format for BDGP6, which shows 24 results
+
+```{R}
+query_results3 <- query(ah, c("Drosophila melanogaster", "dna_sm", "BDGP6", "2bit"))
+print(query_results3)
+```
+1.3.2. We download the newest version, which is "AH106160"
+
+```{R}
+
+drosophila <- ah[["AH106160"]]
+drosophila
+
+```
+2.1.1. As a first step we save all gene data from the EnsDb object from before in a new variable called "gene". We do this, so that we can filter this data specifically later on
+
+```{R}
+genes <- genes(ensdb102)
+genes
+
+```
+
+2.1.2. Now we filter the content of the "gene" variable for only protein-coding genes. We save this new filtered date in a new variable called "pcgenes"
+
+```{R}
+pcgenes <- genes[which(genes$gene_biotype=="protein_coding")]
+pcgenes
+
+```
+
+2.1.3. We now want to know how many different gene IDs and gene symbols we have in this newly formed variable "pcgenes". With the function length(unique()) we make sure that we only count the different gene IDs/gene symbols
+
+
+```{R}
+length(unique(pcgenes$gene_name)) 
+
+```
+
+```{R}
+length(unique(pcgenes$gene_id)) 
+
+```
+
+2.2.1. First we search for the exons of the mouse and filter them specifically for protein-coding ones, while splitting them by transcript
+
+```{R}
+pc_mouseExons <- exonsBy(ensdb102, by = "tx", filter = GeneBiotypeFilter("protein_coding"))
+
+```
+
+2.2.2. We sum the width of the exons of each transcript, we do this with the function "sapply()", so that we don't just calculate the whole width of all exons, but the width in each transcript. Using the "head()" function, we control our calcuation. Here we can see that for example for the transcript ENSMUST00000000001 the length of all exons is 3262 bp 
+    
+
+```{R}
+transcript_lengths <- sapply(pc_mouseExons, function(x) sum(width(x)))
+head(transcript_lengths)
+```
+2.2.3. Now we need to visualize our list and we use ggplot for this
+
+```{R}
+library(ggplot2)
+```
+
+
+```{R}
+ggplot(data.frame(length = transcript_lengths), aes(x = length)) +
+  geom_histogram(binwidth = 100, fill = "blue", color = "blue") +
+  labs(title = "Distribution of Spliced Length of Protein-Coding Transcripts",
+       x = "Length of Transcript (bp)",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+
+
+
+
+
