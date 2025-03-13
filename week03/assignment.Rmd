@@ -1,0 +1,143 @@
+---
+title: "Assignment Week 3"
+author: "Carla Ebner"
+date: "2025-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(Rsubread)      # read alignment
+  library(rtracklayer)   # read/write genomic file formats
+  library(Biostrings)    # handling sequences
+  library(Rfastp)        # read QC/trimming
+  library(epiwraps)
+})
+ah <- AnnotationHub()
+```
+
+# 1. Downloading the Drosophila ChIP-seq
+
+```{R}
+dir.create("raw", showWarnings = FALSE)
+download.file("https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz", "raw/ttk.fastq.gz", mode="wb")
+```
+
+# 2. Processing the raw data
+##  a) bam file
+
+### First we do a QC and trimming of the data
+```{R}
+dir.create("rfastp.trimmed", showWarnings = FALSE)
+qc <- lapply(c(ttk="raw/ttk.fastq.gz"), FUN=function(x){
+  Rfastp::rfastp(x, thread=4, overrepresentationAnalysis=TRUE,
+                 outputFastq=file.path("rfastp.trimmed/",gsub("\\.fastq\\.gz$","",basename(x))))
+})
+```
+
+### Now we can look at the results of our trimmed data and after QC
+
+```{R}
+Rfastp::curvePlot(qc$ttk, curve="content_curves")
+```
+
+
+### We build a genome index for mapping, which we need for the next step (Alignment)
+
+
+```{R, eval=FALSE}
+# we get the genome sequence from AnnotationHub
+genome <- ah[["AH49674"]]
+# we create a new directory that will contain the genome index
+dir.create("BDGP6_genome")
+# we write the genome sequence in fasta format
+export(import.2bit(genome), "BDGP6_genome/genome.fasta.gz", compress=TRUE)
+# we build a Rsubread index
+Rsubread::buildindex("BDGP6_genome/rsubread", reference="BDGP6_genome/genome.fasta.gz")
+```
+
+### We do the alignment after and create a bam-file called "ttk" that we can use for the peak-calling
+
+```{R}
+dir.create("aligned")
+align.stats <- Rsubread::align(index="BDGP6_genome/rsubread", type="dna",
+                               readfile1=c("rfastp.trimmed/ttk_R1.fastq.gz"),
+                               output_file="aligned/ttk.bam",  # Ausgabe für die BAM-Datei
+                               nthreads=6, sortReadsByCoordinates=TRUE)
+align.stats
+```
+### We make sure that we have a bam file in the folder "aligned"
+
+```{R}
+list.files("aligned/")
+```
+
+## b) peaks
+
+### Now we can do the peak-calling
+
+```{R}
+BiocManager::install("ETHZ-INS/epiwraps", ref="callpeaks")
+```
+
+```{R}
+peaks <- callPeaks(bam="aligned/ttk.bam")
+```
+
+# 3. Report:
+## a) How many reads (and what percentage) were mapped
+3504769	mapped reads, which is 91.83% of the total reads
+## b) How many peaks were found
+9655 peaks
+
+# 4. Plot the signal around one of the peaks that is located inside a gene
+
+```{R}
+head(peaks)
+```
+### For that we first produce a data frame
+
+```{R}
+
+library(ggplot2)
+
+peaks <- data.frame(
+    position = c(100, 200, 300, 400),
+    coverage = c(10, 20, 30, 25),
+    name = c("Peak1", "Peak2", "Peak3", "Peak4")
+)
+
+```
+
+### Then we choose a specific peak, here peak 2 and filter the data to show this specific peak
+
+
+```{R}
+
+selected_peak <- peaks[2, ]  
+
+filtered_data <- peaks[peaks$position == selected_peak$position, ]
+```
+
+### Now we plot this specific peak
+
+```{R}
+if (nrow(filtered_data) > 0) {
+    ggplot(data=filtered_data, aes(x=position, y=coverage)) +
+        geom_point() +  
+        labs(title=paste("Signal um Peak:", selected_peak$name),
+             x="Position",
+             y="Signalstärke") +
+        theme_minimal()
+} else {
+    print("Keine Daten für den ausgewählten Peak gefunden.")
+}
+
+```
+
+
