@@ -1,0 +1,122 @@
+---
+title: "Assignment week 4"
+author: "Carla Ebner"
+date: "2025-03-18"
+output: html_document
+---
+
+
+```{R, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(rtracklayer)
+  library(epiwraps)
+  library(GenomicRanges)
+  library(R.utils)
+})
+ah <- AnnotationHub()
+ensdb <- ah[["AH95713"]] # Drosophila EnsDb
+```
+
+
+# 1. Find and download the peaks from ENCODE
+## a) Transcription factor p300
+### We download and unzip the file that we found on ENCODE
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF460EOA/@@download/ENCFF460EOA.bed.gz", "p300.bed.gz")
+gunzip("p300.bed.gz", remove=TRUE) 
+```
+
+
+## b) Histone modifications H3K4me3, H3K4me1, H3K27ac, and H3K27me3
+### We download and unzip the files that we found on ENCODE. We make sure that we download the file that show the original peaks, not the replicated ones
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF422YVG/@@download/ENCFF422YVG.bed.gz", "H3K4me3.bed.gz")
+gunzip("H3K4me3.bed.gz", remove=TRUE)
+```
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF718KBQ/@@download/ENCFF718KBQ.bed.gz", "H3K4me1.bed.gz")
+gunzip("H3K4me1.bed.gz", remove=TRUE)
+```
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF276VUE/@@download/ENCFF276VUE.bed.gz", "H3K27ac.bed.gz")
+gunzip("H3K27ac.bed.gz", remove=TRUE)
+```
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF055QNY/@@download/ENCFF055QNY.bed.gz", "H3K27me3.bed.gz")
+gunzip("H3K27me3.bed.gz", remove=TRUE)
+```
+
+
+# 2. Question: Of the p300 peaks, what proportion overlap each of the marks?
+### First we load all the peaks of the transcription factor p300 and the histone modifications
+
+```{R}
+p300_peaks <- import("p300.bed", format="narrowPeak")
+H3K4me3_peaks <- import("H3K4me3.bed", format="narrowPeak")
+H3K4me1_peaks <- import("H3K4me1.bed", format="narrowPeak")
+H3K27ac_peaks <- import("H3K27ac.bed", format="narrowPeak")
+H3K27me3_peaks <- import("H3K27me3.bed", format="narrowPeak")
+```
+
+### Now we find the total amount of peaks of p300, which is 28341 peaks
+
+```{R}
+total_p300_peaks <- length(p300_peaks)
+total_p300_peaks
+```
+### Then we count the overlapping region of p300 with each histone modification
+```{R}
+overlaps_h3k4me3 <- findOverlaps(p300_peaks, H3K4me3_peaks, type="within")
+num_overlaps_h3k4me3 <- length(overlaps_h3k4me3)
+num_overlaps_h3k4me3
+```
+```{R}
+overlaps_h3k4me1 <- findOverlaps(p300_peaks, H3K4me1_peaks, type="within")
+num_overlaps_h3k4me1 <- length(overlaps_h3k4me1)
+num_overlaps_h3k4me1
+```
+```{R}
+overlaps_h3k27ac <- findOverlaps(p300_peaks, H3K27ac_peaks, type="within")
+num_overlaps_h3k27ac <- length(overlaps_h3k27ac)
+num_overlaps_h3k27ac
+```
+```{R}
+overlaps_h3k27me3 <- findOverlaps(p300_peaks, H3K27me3_peaks, type="within")
+num_overlaps_h3k27me3 <- length(overlaps_h3k27me3)
+num_overlaps_h3k27me3
+```
+### Now we calculate the percentage of overlapping peaks
+
+```{R}
+percent_h3k4me3 <- (num_overlaps_h3k4me3 / total_p300_peaks) * 100
+percent_h3k4me1 <- (num_overlaps_h3k4me1 / total_p300_peaks) * 100
+percent_h3k27ac <- (num_overlaps_h3k27ac / total_p300_peaks) * 100
+percent_h3k27me3 <- (num_overlaps_h3k27me3 / total_p300_peaks) * 100
+```
+
+
+### We show the results of our calculation
+
+```{R}
+cat("The overlapping part of p300 and H3K4me3 is:", percent_h3k4me3, "%\n") 
+cat("The overlapping part of p300 and H3K4me1 is:", percent_h3k4me1, "%\n") 
+cat("The overlapping part of p300 and H3K27ac is:", percent_h3k27ac, "%\n") 
+cat("The overlapping part of p300 and H3K27me3 is:", percent_h3k27me3, "%\n") 
+```
+
+
