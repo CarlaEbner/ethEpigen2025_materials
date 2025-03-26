@@ -1,0 +1,134 @@
+---
+title: "Assignment week 5"
+author: "Carla Ebner"
+date: "2025-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(rtracklayer)
+  library(epiwraps)
+  library(GenomicRanges)
+  library(R.utils)
+})
+ah <- AnnotationHub()
+ensdb <- ah[["AH95713"]] # Drosophila EnsDb
+```
+
+
+# 1. Identify bivalent domains (H3K27me3 + H3K4me3) from (mouse or human) embryonic stem cells (ESC)
+### First we download and unzip the files that we found on ENCODE
+
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF423ZVR/@@download/ENCFF423ZVR.bed.gz", "H3K27me3.bed.gz")
+gunzip("H3K27me3.bed.gz", remove=TRUE)
+```
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF589MNA/@@download/ENCFF589MNA.bed.gz", "H3K4me3.bed.gz")
+gunzip("H3K4me3.bed.gz", remove=TRUE)
+```
+### Then we load all the peaks
+
+```{R}
+H3K27me3_peaks <- import("H3K27me3.bed", format="narrowPeak")
+H3K4me3_peaks <- import("H3K4me3.bed", format="narrowPeak")
+```
+
+```{R}
+unique(seqnames(H3K27me3_peaks))
+unique(seqnames(H3K4me3_peaks))
+```
+
+### Now we want to identify the bivalent domains, so regions that are marked by H3K27me3 and H3K4me3 
+
+```{R}
+bivalent_H3K27me3_H3K4me3 <- findOverlaps(H3K27me3_peaks, H3K4me3_peaks, type="within")
+bivalent_H3K27me3_H3K4me3
+```
+
+
+```{R}
+bivalent_domains <- suppressWarnings(
+  pintersect(H3K27me3_peaks[from(bivalent_H3K27me3_H3K4me3)], 
+              H3K4me3_peaks[to(bivalent_H3K27me3_H3K4me3)])
+)
+bivalent_domains
+```
+### We found 8149 bivalent domains
+
+# 2. What happens to those regions upon differentiation?
+### We choose erythroblasts as differentiated cell type and download the files for H3K27me3 and H3K4me3 
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF827PLH/@@download/ENCFF827PLH.bed.gz", "H3K27me3_erythroblasts.bed.gz")
+gunzip("H3K27me3_erythroblasts.bed.gz", remove=TRUE)
+```
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF851JRN/@@download/ENCFF851JRN.bed.gz", "H3K4me3_erythroblasts.bed.gz")
+gunzip("H3K4me3_erythroblasts.bed.gz", remove=TRUE)
+```
+
+### Then we load the peaks
+
+```{R}
+H3K27me3_erythroblasts_peaks <- import("H3K27me3_erythroblasts.bed", format="narrowPeak")
+H3K4me3_erythroblasts_peaks <- import("H3K4me3_erythroblasts.bed", format="narrowPeak")
+```
+
+### Now we want to find the overlapping regions of this differentiated cell type (erythroblasts) with the mESC bivalent domains
+### Overlaps with H3K27me3 erythroblasts region: 2829 overlaps
+
+```{R}
+H3K27me3_overlaps <- findOverlaps(bivalent_domains, H3K27me3_erythroblasts_peaks, type="within")
+H3K27me3_overlaps
+length(H3K27me3_overlaps)
+```
+
+### Overlaps with H3K4me3 erythroblasts region: 2260 overlaps
+
+```{R}
+H3K4me3_overlaps <- suppressWarnings(findOverlaps(bivalent_domains, H3K4me3_erythroblasts_peaks, type="within"))
+H3K4me3_overlaps
+length(H3K4me3_overlaps)
+```
+
+### Overlaps with both marks: 96 overlaps. Here we create the overlap of the H3K27me3 erythroblasts peaks and the H3K4me3 erythroblasts peaks first
+
+```{R}
+both <- findOverlaps(H3K27me3_erythroblasts_peaks, H3K4me3_erythroblasts_peaks, type="within")
+both
+```
+
+```{R}
+both_domains <- pintersect(H3K27me3_erythroblasts_peaks[from(both)], 
+              H3K4me3_erythroblasts_peaks[to(both)])
+both_domains
+```
+
+
+```{R}
+both_overlaps <- findOverlaps(both_domains, bivalent_domains, type="within")
+both_overlaps
+length(both_overlaps)
+```
+### Now we want to show the results. We see that the biggest part of the bivalent domains, doesn't stay bivalent after differentiation
+
+```{R}
+cat("The number of mESC bivalent domains overlapping with H3K27me3 in erythroblasts is:", length(H3K27me3_overlaps), "\n") 
+
+cat("The number of mESC bivalent domains overlapping with H3K4me3 in erythroblasts is:", length(H3K4me3_overlaps), "\n") 
+
+cat("The number of mESC bivalent domains overlapping with both H3K27me3 and H3K4me3 in erythroblasts is:", length(both_overlaps), "\n") 
+```
+
+
