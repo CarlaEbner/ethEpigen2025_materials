@@ -1,0 +1,145 @@
+---
+title: "Assignment week 6"
+author: "Carla Ebner"
+date: "2025-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("BSgenome.Hsapiens.UCSC.hg38")
+```
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(BiocManager)
+  library(AnnotationHub)
+  library(GenomicRanges)
+  library(rtracklayer)
+  library(epiwraps)
+  library(R.utils)
+  library(ggplot2)
+  library(GenomicFeatures)
+  library(BSgenome.Hsapiens.UCSC.hg38)
+  
+  library(motifmatchr) # for scanning sequences for matches of given motifs
+  library(Biostrings) # for handling sequences
+  library(MotifDb) # database of motifs
+  library(TFBSTools) # for handling some motif formats
+  library(universalmotif) # for converting motifs to various formats
+  library(PWMEnrich) # for R-based motif enrichment analysis
+})
+```
+
+# 1. Choose a transcription factor: CREB1, Homo sapiens H1
+### First we download, unzip and import the file from Encode
+
+```{R}
+download.file("https://www.encodeproject.org/files/ENCFF978KGB/@@download/ENCFF978KGB.bed.gz", "CREB1.bed.gz")
+gunzip("CREB1.bed.gz", remove=TRUE)
+CREB1_peaks <- import("CREB1.bed", format="narrowPeak")
+```
+
+### Then we search the human genome from AnnotationHub and import it. We will use BSgenome.Hsapiens.UCSC.hg38 later, this is only for illustration
+
+```{R}
+library(rtracklayer)
+ah <- AnnotationHub()
+human_genomes <- query(ah, "Homo sapiens")
+
+genome <- ah[["AH119325"]]
+genes <- genes(genome)
+head(genes)
+```
+
+
+# 2. Motif
+### We search the motifs of CREB1 and choose one specific motif, that we visualize
+
+```{R}
+motifs <- query(MotifDb, "CREB1")
+names(motifs)
+motif <- motifs[["Hsapiens-cisbp_1.02-M3083_1.02"]]
+motif
+view_motifs(motifs[1:2])
+```
+
+# 3. Motif matches
+## a) Of all the peaks, what proportion contains a motif for the factor?
+### We convert the motif so we can use it later
+
+```{R}
+motif2 <- convert_motifs(motif, class="TFBSTools-PWMatrix")
+print(motif)
+```
+### We use motifmatch to find the peaks and motif that overlap with each other
+
+```{R}
+motif_peaks <- motifmatchr::matchMotifs(motif2, subject=CREB1_peaks, genome=BSgenome.Hsapiens.UCSC.hg38, out="positions") 
+motif_peaks <- motif_peaks[[1]] 
+head(motif_peaks)
+```
+
+### We calculate the total peaks and how many of them contain a motif
+
+```{R}
+total_peaks <- length(CREB1_peaks)
+total_motif_peaks <- length(motif_peaks)
+percentage_motif <- (total_motif_peaks / total_peaks) * 100
+percentage_motif
+
+```
+
+### We show the result
+
+
+```{R}
+cat("Of the", total_peaks, "peaks,", percentage_motif, "%  contain a motif.", "\n") 
+```
+
+
+## b) Of all instances of that motif in the genome (or in one chromosome), what proportion is bound by the factor (i.e. has a peak)?
+
+
+```{R}
+available_sequences <- seqnames(Hsapiens)
+print(available_sequences)
+filtered_genes <- genes[seqnames(genes) %in% available_sequences]
+```
+
+### We match the motif against the genomic position
+
+
+```{R}
+motif_across_genome <- matchMotifs(motif2, subject=filtered_genes, out="positions")[[1]]
+names(motif_across_genome) <- seq_along(motif_across_genome)
+motif_across_genome <- as(motif_across_genome, "GRanges")
+head(motif_across_genome)
+```
+
+### We calculate the total motifs in the genome and how many of them overlap a peak
+
+```{R}
+total_motif_across_genome <- length(motif_across_genome)
+total_motif_across_genome
+```
+
+```{R}
+percentage_peak <- (total_motif_peaks / total_motif_across_genome) * 100
+percentage_peak
+```
+
+### We show the result
+
+```{R}
+cat("Of the", total_motif_across_genome, "motif instances,", percentage_peak, "%  overlap a peak.", "\n") 
+```
+
