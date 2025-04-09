@@ -31,7 +31,7 @@ ah <- AnnotationHub(localHub=TRUE)
 genome <- ah[["AH68356"]] # mouse ensembldb object
 ```
 
-# 1. Plot the insertion around the high-confidence motifs of two factors: KLF4 and MAZ
+# Plot the insertion around the high-confidence motifs of two factors: KLF4 and MAZ
 
 ### First we load the dataset of ATAC on chr19
 
