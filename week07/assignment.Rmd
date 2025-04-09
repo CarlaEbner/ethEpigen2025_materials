@@ -1,0 +1,146 @@
+---
+title: "Aissgnment week 7"
+author: "Carla Ebner"
+date: "2025-04-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{R}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(AnnotationHub)
+  library(MotifDb)
+  library(memes)
+  library(universalmotif)
+  library(ensembldb)
+  library(ggplot2)
+  library(GenomicFeatures)
+  library(ComplexHeatmap)
+  library(ChIPseeker)
+})
+```
+
+
+```{R}
+ah <- AnnotationHub(localHub=TRUE)
+genome <- ah[["AH68356"]] # mouse ensembldb object
+```
+
+# 1. Plot the insertion around the high-confidence motifs of two factors: KLF4 and MAZ
+
+### First we load the dataset of ATAC on chr19
+
+```{R, eval=FALSE}
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam", "atac.chr19.bam", mode="wb")
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam.bai", "atac.chr19.bam.bai", mode="wb")
+```
+
+```{R}
+bam <- "atac.chr19.bam"
+```
+
+
+## Now we prepare the two different tracks
+### This is the track for the number of cuts/insertion sites at each position, specifically for nucelosome-free fragments
+
+```{R}
+bam2bw(bam, output_bw = "NF_cuts.bw", paired=TRUE, binWidth=1L, type="ends", minFragLength=30, 
+       maxFragLength=120, trim=4L, extend=3L, forceSeqlevelsStyle = "Ensembl")
+
+```
+
+### This is the track for the centers of nucleosome-containing fragments 
+
+```{R}
+bam2bw(bam, output_bw = "centers.bw", paired=TRUE, binWidth=5L, minFragLength=120, trim=4L,
+       maxFragLength=300, type="center", extend=10L, forceSeqlevelsStyle = "Ensembl")
+
+```
+
+## Now we search for motif matches across chr19
+### First we load and convert the motifs for KLF4 and MAZ
+
+
+```{R}
+motif_klf4 <- MotifDb::query(MotifDb, c("KLF4", "Mus"))[[1]]
+motif_klf4
+motif_klf4_con <- convert_motifs(motif_klf4, class="TFBSTools-PFMatrix")
+motif_klf4_con
+```
+
+
+```{R}
+motif_maz <- MotifDb::query(MotifDb, c("MAZ","Mus"))[[1]]
+motif_maz
+motif_maz_con <- convert_motifs(motif, class="TFBSTools-PFMatrix")
+motif_maz_con
+```
+### Then we load the genome for chr19
+
+```{R}
+genome <- ah[["AH68356"]]
+chr19 <- import(genome)["19"]
+```
+
+### Now we search for motif matches of KLF4 and MAZ across chr19 and convert the results
+
+```{R}
+moi_klf4 <- motifmatchr::matchMotifs(motif_klf4_con, chr19, out="positions", p.cutoff=1e-5)[[1]]
+moi_klf4 <- as(setNames(moi,names(chr19)), "GRanges")
+moi_klf4
+```
+
+
+```{R}
+moi_maz <- motifmatchr::matchMotifs(motif_maz_con, chr19, out="positions", p.cutoff=1e-5)[[1]]
+moi_maz <- as(setNames(moi,names(chr19)), "GRanges")
+moi_maz
+```
+## We now want to plot our results
+### First we need to set the level and names in the two files from "chr19" to "19" so that the names are consistent
+
+
+```{R}
+seqlevels(moi_klf4_chr19) <- "19"
+seqlevels(moi_maz_chr19) <- "19"
+
+
+seqlengths(moi_klf4_chr19) <- c("19" = 59128983)
+seqlengths(moi_maz_chr19) <- c("19" = 59128983)
+
+
+print(seqnames(moi_klf4_chr19)) 
+print(seqnames(moi_maz_chr19))   
+print(seqlevels(moi_klf4_chr19)) 
+print(seqlevels(moi_maz_chr19))  
+
+
+print(unique(seqnames(moi_klf4_chr19)))  
+print(unique(seqnames(moi_maz_chr19)))   
+```
+
+### Now we prepare the list of tracks, then we extract the signals arount the motif and finally we plot the results
+
+
+```{R}
+tracks <- list.files(pattern = "bw$")  
+names(tracks) <- gsub("\\.bw", "", basename(tracks))  
+
+
+sm_klf4 <- signal2Matrix(tracks, moi_klf4_chr19, w = 5, extend = 300)
+sm_maz <- signal2Matrix(tracks, moi_maz_chr19, w = 5, extend = 300)
+
+
+# Heatmap for KLF4:
+plotEnrichedHeatmaps(sm_klf4, trim=0.95, multiScale = TRUE, axis_name = "0")
+                     
+# Heatmap for MAZ:
+plotEnrichedHeatmaps(sm_maz, trim=0.95, multiScale = TRUE, axis_name = "0")
+```
+
+
