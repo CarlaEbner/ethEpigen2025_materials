@@ -77,7 +77,7 @@ motif_klf4_con
 ```{R}
 motif_maz <- MotifDb::query(MotifDb, c("MAZ","Mus"))[[1]]
 motif_maz
-motif_maz_con <- convert_motifs(motif, class="TFBSTools-PFMatrix")
+motif_maz_con <- convert_motifs(motif_maz, class="TFBSTools-PFMatrix")
 motif_maz_con
 ```
 ### Then we load the genome for chr19
@@ -91,49 +91,26 @@ chr19 <- import(genome)["19"]
 
 ```{R}
 moi_klf4 <- motifmatchr::matchMotifs(motif_klf4_con, chr19, out="positions", p.cutoff=1e-5)[[1]]
-moi_klf4 <- as(setNames(moi,names(chr19)), "GRanges")
+moi_klf4 <- as(setNames(moi_klf4,names(chr19)), "GRanges")
 moi_klf4
 ```
 
 
 ```{R}
 moi_maz <- motifmatchr::matchMotifs(motif_maz_con, chr19, out="positions", p.cutoff=1e-5)[[1]]
-moi_maz <- as(setNames(moi,names(chr19)), "GRanges")
+moi_maz <- as(setNames(moi_maz,names(chr19)), "GRanges")
 moi_maz
 ```
 ## We now want to plot our results
-### First we need to set the level and names in the two files from "chr19" to "19" so that the names are consistent
-
-
-```{R}
-seqlevels(moi_klf4_chr19) <- "19"
-seqlevels(moi_maz_chr19) <- "19"
-
-
-seqlengths(moi_klf4_chr19) <- c("19" = 59128983)
-seqlengths(moi_maz_chr19) <- c("19" = 59128983)
-
-
-print(seqnames(moi_klf4_chr19)) 
-print(seqnames(moi_maz_chr19))   
-print(seqlevels(moi_klf4_chr19)) 
-print(seqlevels(moi_maz_chr19))  
-
-
-print(unique(seqnames(moi_klf4_chr19)))  
-print(unique(seqnames(moi_maz_chr19)))   
-```
-
-### Now we prepare the list of tracks, then we extract the signals arount the motif and finally we plot the results
-
+### We prepare the list of tracks, then we extract the signals arount the motif and finally we plot the results
 
 ```{R}
 tracks <- list.files(pattern = "bw$")  
 names(tracks) <- gsub("\\.bw", "", basename(tracks))  
 
 
-sm_klf4 <- signal2Matrix(tracks, moi_klf4_chr19, w = 5, extend = 300)
-sm_maz <- signal2Matrix(tracks, moi_maz_chr19, w = 5, extend = 300)
+sm_klf4 <- signal2Matrix(tracks, moi_klf4, w = 5, extend = 300)
+sm_maz <- signal2Matrix(tracks, moi_maz, w = 5, extend = 300)
 
 
 # Heatmap for KLF4:
