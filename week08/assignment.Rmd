@@ -1,0 +1,151 @@
+---
+title: "Assignment week 8"
+author: "Carla Ebner"
+date: "2025-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(ggplot2)
+  library(SummarizedExperiment) # data structure
+  library(sechm) # for plotting heatmaps from a SummrizedExperiment
+  library(BiocParallel) # for multithreading
+  library(chromVAR) # for motif accessibility estimation
+  library(limma) # for statistical analysis
+  library(AnnotationHub)
+})
+
+register(SnowParam(2))
+```
+#1. Prepare all the data for the analysis
+### First we download the ATAC-seq peak counts in the hippocampus upon stress
+
+```{R}
+options(timeout=6000)
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds", "stress.SE.rds", mode="wb")
+se <- readRDS("stress.SE.rds")
+head(se)
+```
+### Then we download the mouse genome
+
+```{R}
+ah <- AnnotationHub()
+genome <- ah[["AH68356"]]
+genes <- import(genome)
+```
+### Now we get the database of motifs
+
+```{R}
+motifs <- query(MotifDb, c("HOCOMOCOv10", "Mmusculus"))
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+           universalmotif::convert_motifs(motifs, class="TFBSTools-PWMatrix"),
+           mcols(motifs)$geneSymbol))
+motifs <- motifs[unique(names(motifs))]
+```
+
+### We check to see which samples are control/FSS and which are female/male
+
+```{R}
+head(assay(se))
+```
+### Now we assign the conditions (CTRL/FSS) and sex (F/M) and set the row names
+
+```{R}
+colData(se)$condition <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","FSS","FSS","FSS","FSS","FSS","FSS")
+colData(se)$sex <- c("F","F","F","M","M","M","F","F","F","M","M","M")
+row.names(se) <- as.character(granges(se))
+```
+
+### We add the GC-bias to the se data and see in the histogram that the distribution seems normal
+
+```{R}
+se <- chromVAR::addGCBias(se, genome=genes)
+rowData(se)
+hist(rowData(se)$bias)
+```
+### We search the motifs in our se data (peaks)
+
+```{R}
+moi <- motifmatchr::matchMotifs(motifs, subject=se, genome=genes)
+head(assay(moi))
+```
+### We ensure the reproducibility
+
+```{R}
+set.seed(1234)
+bg <- chromVAR::getBackgroundPeaks(se, niterations=500)
+dev <- chromVAR::computeDeviations(object = se, annotations=moi,
+                                   background_peaks=bg)
+```
+
+# Differential analysis
+### We specify the baseline conditions (here: "CTRL" and "F") for "condition" and "sex"
+
+```{R}
+dev$condition <- factor(dev$condition)
+dev$condition <- relevel(dev$condition, "CTRL")
+
+dev$sex <- factor(dev$sex)
+dev$sex <- relevel(dev$sex, "F")
+```
+
+
+### Then we create two model matrices, fit the model and choose the coefficient from the model matrix that we want to test (FSS and M)
+
+```{R}
+mm_condition <- model.matrix(~condition, data=as.data.frame(colData(dev)))
+mm_sex <- model.matrix(~sex, data=as.data.frame(colData(dev)))
+```
+
+
+```{R}
+fit_condition <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm_condition))
+fit_sex <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm_sex))
+```
+
+
+```{R}
+res_condition <- as.data.frame(limma::topTable(fit_condition, coef="conditionFSS", number = Inf))
+head(res_condition)
+
+res_sex <- as.data.frame(limma::topTable(fit_sex, coef="sexM", number = Inf))
+head(res_sex)
+```
+
+# Results
+## Top most significant motifs
+### We search for the most significant motifs, which we use for the heatmap later. We see some significant differences in expression of the motifs in the CTRL vs. FSS groups and in the F vs. M groups
+
+```{R}
+res_condition$TF <- row.names(res_condition)
+res_sex$TF <- row.names(res_sex)
+
+ggplot(res_condition, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text()
+ggplot(res_sex, aes(logFC, -log10(adj.P.Val), label=TF)) + geom_text()
+```
+## Heatmap
+### We create a heatmap with the most significant motifs, which we ensured above with ordering by significance 
+
+```{R}
+metadata(dev)$anno_colors <- list(condition = c(CTRL = "grey", FSS = "yellow"), sex = c(F = "deeppink", M = "blue"))
+
+
+sechm::sechm(dev, features = head(row.names(res_condition)), assayName="z", top_annotation = c("condition", "sex"))
+
+sechm::sechm(dev, features = head(row.names(res_sex)), assayName="z", top_annotation = c("condition", "sex"))
+```
+## Interpreting the results
+### CTRL vs. FSS (forced swim stress): We can see significant diffeences between the Control and FSS group in the motifs PRGR, ANDR and GCR. We see a higher accessibility of these motifs in 5 of the FSS groups, with only one female sample as an exception. In the other 3 motifs, there is not a significant difference between the Control and FSS group.
+### F vs. M: We can see a difference between the female and male samples in all motifs (MYB, PTF1A, RUNX3, ZN143, TEAD1 and TYY1), whereby the accessibility of these motifs is higher in females than in males.
+
+
+
